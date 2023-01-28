@@ -67,6 +67,7 @@
  * Changelog:
  *       version 3.0
  *        - ATTENTION: BSB_LAN_custom_defs.h.default needs to be renamed to BSB_LAN_custom_defs.h and only contains a very limited set of parameters by default. See the manual for getting device-specific parameter lists.
+ *        - Add new '/LN' URL command to force logging irrespective of current interval.
  *        - Improved library checks: No need for ESP32 users to remove ArduinoMDNS and WiFiSpi folders anymore.
  *        - New SdFat version 2 for Arduino Due
  *        - New data type VT_BINARY_ENUM
@@ -1456,7 +1457,7 @@ void SerialPrintData(byte* msg) {
   // Calculate pure data length without housekeeping info
   int data_len=0;
   byte offset = 0;
-  byte msg_type = msg[4+(bus->getBusType()*1)];
+  byte msg_type = msg[4+(bus->getBusType()*4)];
   if (bus_type != BUS_PPS) {
     if (msg_type >= 0x12) {
       offset = 4;
@@ -3314,6 +3315,7 @@ int set(int line      // the ProgNr of the heater parameter
     case VT_MINUTES_SHORT: // ( Fehler - Alarm)
     case VT_MINUTES_SHORT_N: // ( Fehler - Alarm)
     case VT_PERCENT:
+    case VT_PERCENT_NN:
     case VT_PERCENT1:
     case VT_ENUM:          // enumeration types
     case VT_BINARY_ENUM:
@@ -3386,6 +3388,7 @@ int set(int line      // the ProgNr of the heater parameter
     case VT_LITERPERMIN_N:
     case VT_CONSUMPTION:
     case VT_PRESSURE_WORD1:
+    case VT_PRESSURE_1000:
     case VT_PPM:
     case VT_FP02:
     case VT_SECONDS_WORD5:
@@ -3507,7 +3510,11 @@ int set(int line      // the ProgNr of the heater parameter
       {
       uint16_t t=atof(val)*1000.0;
       if (setcmd) {
-        param[0]=decodedTelegram.enable_byte;
+        if (val[0]!='\0') {
+          param[0]=decodedTelegram.enable_byte;
+        } else {
+          param[0]=decodedTelegram.enable_byte-1;
+        }
         param[1]=(t >> 8);
         param[2]= t & 0xff;
       } else { // INF message type (e.g. for room temperature)
@@ -3527,7 +3534,11 @@ int set(int line      // the ProgNr of the heater parameter
       {
       uint32_t t=((int)(atof(val)*decodedTelegram.operand));
       if (setcmd) {
-        param[0]=decodedTelegram.enable_byte;
+        if (val[0]!='\0') {
+          param[0]=decodedTelegram.enable_byte;
+        } else {
+          param[0]=decodedTelegram.enable_byte-1;
+        }
         param[1]=(t >> 8);
         param[2]= t & 0xff;
       } else { // INF message type
@@ -4855,7 +4866,7 @@ void loop() {
               char base64_user_pass[88] = { 0 };
               int user_pass_len = strlen(USER_PASS);
               Base64.encode(base64_user_pass, USER_PASS, user_pass_len);
-              if (!(httpflags & HTTP_AUTH) && USER_PASS[0] && strstr_P(outBuf + buffershift,PSTR("Authorization: Basic"))!=0 && strstr(outBuf + buffershift,base64_user_pass)!=0) {
+              if (!(httpflags & HTTP_AUTH) && USER_PASS[0] && strstr_P(outBuf + buffershift,PSTR("uthorization: Basic"))!=0 && strstr(outBuf + buffershift,base64_user_pass)!=0) { // HTML headers seem to be case-insensitive, some clients send "authorization" instead of "Authorization". Here this can be covered by just removing the first letter, but with other HTTP header tests above, this might be more complicated...
                 httpflags |= HTTP_AUTH;
               }
               memset(outBuf + buffershift,0, charcount);
@@ -6247,6 +6258,10 @@ void loop() {
                 printyesno(logTelegram & LOGTELEGRAM_BROADCAST_ONLY) ;
               }
               break;
+            case 'N':     // log now
+              log_now = 1;
+              printToWebClient(PSTR(MENU_TEXT_LIR));
+              break;
             case 'U':
               if (p[3]=='=') {
                 if (p[4]=='1') {
@@ -6992,7 +7007,7 @@ void loop() {
     }
 #if defined(WIFI) && defined(ESP32)
 // if WiFi is down, try reconnecting every minute
-    if (WiFi.status() != WL_CONNECTED) {
+    if (WiFi.status() != WL_CONNECTED && localAP == false) {
       printFmtToDebug(PSTR("%ul Reconnecting to WiFi...\r\n"), millis());
       WiFi.disconnect();
       WiFi.begin();
