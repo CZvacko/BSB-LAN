@@ -5225,6 +5225,9 @@ void loop() {
                 printToWebClient(PSTR(MENU_TEXT_ER3 "\r\n"));
                 if (setresult == 2) {
                   printToWebClient(PSTR(" - " MENU_TEXT_ER4 "\r\n"));
+                  if ((default_flag & FL_SW_CTL_RONLY) == FL_SW_CTL_RONLY && programWriteMode == 0) {
+                    printToWebClient(PSTR(" " MENU_TEXT_ER8 "\r\n"));
+                  }
                 }
               } else {
                 if (setcmd) {            // was this a SET command?
@@ -5368,9 +5371,11 @@ void loop() {
 
           uint8_t found_ids[10] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
           if (bus->Send(TYPE_QINF, 0x053D0002, msg, tx_msg, NULL, 0, false)) {
+            printTelegram(tx_msg, -1);
             unsigned long startquery = millis();
             while (millis() - startquery < 10000) {
               if (bus->GetMessage(msg)) {
+                printTelegram(msg, -1);
                 uint8_t found_id = 0;
                 bool found = false;
                 if (bus->getBusType() == BUS_BSB && msg[4] == 0x02) {
@@ -5407,10 +5412,11 @@ void loop() {
             printFmtToWebClient(PSTR(MENU_TEXT_QRT " %hu..."), found_ids[x]);
             flushToWebClient();
 
-            uint32_t c=0;
+            uint32_t c=0; 
             float l;
             int orig_dev_fam = my_dev_fam;
             int orig_dev_var = my_dev_var;
+            query_program_and_print_result(6224, PSTR("\r\n"), NULL);
             query_program_and_print_result(6225, PSTR("\r\n"), NULL);
             int temp_dev_fam = strtod(decodedTelegram.value,NULL);
             query_program_and_print_result(6226, PSTR("\r\n"), NULL);
@@ -5510,24 +5516,36 @@ void loop() {
             int outBufLen = strlen(outBuf);
             unsigned long timeout = millis() + 3000;
             while (!bus->Send(TYPE_QUR, 0x053D0001, msg, tx_msg) && (millis() < timeout)) {
+              printTelegram(tx_msg, -1);
+              printTelegram(msg, -1);
               delay(500);
             }
+            printTelegram(tx_msg, -1);
+            printTelegram(msg, -1);
             bin2hex(outBuf + outBufLen, msg, msg[bus->getLen_idx()]+bus->getBusType(), ' ');
             printToWebClient(outBuf + outBufLen);
             printToWebClient(PSTR("\r\n"));
             timeout = millis() + 3000;
             while (!bus->Send(TYPE_QUR, 0x053D0064, msg, tx_msg) && (millis() < timeout)) {
+              printTelegram(tx_msg, -1);
+              printTelegram(msg, -1);
               delay(500);
             }
+            printTelegram(tx_msg, -1);
+            printTelegram(msg, -1);
             bin2hex(outBuf + outBufLen, msg, msg[bus->getLen_idx()]+bus->getBusType(), ' ');
             printToWebClient(outBuf + outBufLen);
             printToWebClient(PSTR("\r\n"));
             flushToWebClient();
             timeout = millis() + 3000;
             while (!bus->Send(TYPE_IQ1, c, msg, tx_msg) && (millis() < timeout)) {
+              printTelegram(tx_msg, -1);
+              printTelegram(msg, -1);
               printToWebClient(PSTR("Didn't receive matching telegram, resending...\r\n"));
               delay(500);
             }
+            printTelegram(tx_msg, -1);
+            printTelegram(msg, -1);
             if (msg[4+bus->getBusType()*4] == 0x13) {
               int IA1_max = (msg[7+bus->getBusType()*4] << 8) + msg[8+bus->getBusType()*4];
               timeout = millis() + 3000;
@@ -5794,7 +5812,9 @@ void loop() {
               if ((bus->getBusType() != BUS_PPS) || (bus->getBusType() == BUS_PPS && (cat == CAT_PPS || cat == CAT_USERSENSORS))) {
                 cat_min = ENUM_CAT_NR[cat * 2];
                 cat_max = ENUM_CAT_NR[cat * 2 + 1];
-
+                if (cat_max > ENUM_CAT_NR[cat*2+2]) {
+                  cat_max = ENUM_CAT_NR[cat*2+2]-1;
+                }
                 float j = cat_min;
 //WARNING: simple increment of j was changed because some prognr have decimal part.
                 do{
@@ -5953,6 +5973,9 @@ void loop() {
                     printENUM(ENUM_CAT,sizeof(ENUM_CAT),cat,1);
                     cat_min = ENUM_CAT_NR[cat*2];
                     cat_max = ENUM_CAT_NR[cat*2+1];
+                    if (cat_max > ENUM_CAT_NR[cat*2+2]) {
+                      cat_max = ENUM_CAT_NR[cat*2+2]-1;
+                    }
 
                     printToWebClient(decodedTelegram.enumdescaddr); //copy Category name to buffer
                     printFmtToWebClient(PSTR("\", \"min\": %g, \"max\": %g }"), cat_min, cat_max);
@@ -5970,6 +5993,9 @@ void loop() {
                   }
                   cat_min = ENUM_CAT_NR[search_cat];
                   cat_max = ENUM_CAT_NR[search_cat+1];
+                  if (cat_max > ENUM_CAT_NR[search_cat+2]) {
+                    cat_max = ENUM_CAT_NR[search_cat+2]-1;
+                  }
                   cat_param = cat_min;
                 } else {
 //WARNING: simple increment of cat_param was changed because some prognr have decimal part.
@@ -6536,6 +6562,9 @@ void loop() {
               uint8_t cat = atoi(&range[1]) * 2; // * 2 - two columns in ENUM_CAT_NR table
               start = ENUM_CAT_NR[cat];
               end = ENUM_CAT_NR[cat+1];
+              if (end > ENUM_CAT_NR[cat+2]) {
+                end = ENUM_CAT_NR[cat+2]-1;
+              }
             } else {
               // split range
               line_start=range;

@@ -73,9 +73,16 @@ inline uint16_t get_cmdtbl_enumstr_len(int i) {
 
 
 inline uint8_t get_cmdtbl_category(int i) {
-  for (uint8_t x=0;x<sizeof(ENUM_CAT_NR)/sizeof(ENUM_CAT_NR[0]);x=x+2) {
-    if (ENUM_CAT_NR[x] <= cmdtbl[i].line && ENUM_CAT_NR[x+1] >= cmdtbl[i].line) {
-      return x/2;
+  int cat_min = 0;
+  int cat_max = 0;
+  for (uint8_t cat=0;cat<CAT_UNKNOWN;cat++) {
+    cat_min = ENUM_CAT_NR[cat*2];
+    cat_max = ENUM_CAT_NR[cat*2+1];
+    if (cat_max > ENUM_CAT_NR[cat*2+2]) {
+      cat_max = ENUM_CAT_NR[cat*2+2]-1;
+    }
+    if (cmdtbl[i].line >= cat_min && cmdtbl[i].line <= cat_max) {
+      return cat;
     }
   }
   return 0;
